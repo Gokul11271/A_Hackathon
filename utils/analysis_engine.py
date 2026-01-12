@@ -1,6 +1,51 @@
 
 import pandas as pd
 import numpy as np
+from utils.news_scraper import NewsScraper
+
+# Initialize shared scraper
+scraper = NewsScraper()
+
+class ReasonDiscovery:
+    def __init__(self, pattern, date_found, location, metric_val):
+        self.pattern = pattern
+        self.date_found = date_found
+        self.location = location
+        self.metric_val = metric_val
+        self.possible_reasons = [] # List of dicts {title, source, link}
+
+    def find_reasons(self):
+        """
+        Populate possible_reasons using the NewsScraper.
+        """
+        # Format date for context if needed, though scraper uses loose matching for now
+        self.possible_reasons = scraper.correlate_event(
+            self.pattern, 
+            self.date_found, 
+            self.location
+        )
+
+    def to_dict(self):
+        # Flatten for table display
+        if not self.possible_reasons:
+            return {
+                "Pattern": f"{self.pattern} ({self.metric_val})",
+                "Date": str(self.date_found),
+                "Possible Reason": "No external events found",
+                "Source": "-"
+            }
+        
+        # Taking the top result for the main table row
+        # In a real UI, we might show multiple, but for the table, one is cleaner.
+        top_reason = self.possible_reasons[0]
+        return {
+            "Pattern": f"{self.pattern} ({self.metric_val})",
+            "Date": str(self.date_found),
+            "Possible Reason": top_reason['title'],
+            "Source": top_reason['source'],
+            "Link": top_reason['link']
+        }
+
 
 class Recommendation:
     def __init__(self, title, description, district, pincode=None, severity="Medium", metric_val=0, action_item=""):
@@ -176,3 +221,61 @@ def get_recommendations(df, state_filter=None, district_filter=None):
             ))
 
     return recs
+
+def get_reason_discovery(df, state_filter=None, district_filter=None):
+    """
+    Identifies data anomalies and attempts to explain them via web scraping.
+    """
+    discoveries = []
+    
+    subset = df.copy()
+    if state_filter and state_filter != "All India":
+        subset = subset[subset['State'] == state_filter]
+    if district_filter:
+        subset = subset[subset['District'] == district_filter]
+
+    if subset.empty:
+        return []
+
+    # 1. Detect Spikes in Enrolment (Month level if available, else aggregated)
+    # Since we have Year/Quarter, let's look for outliers in the filtered view.
+    # We'll group by District to find specific local spikes.
+    
+    # Heuristic: Find district with max Activity in the dataset
+    if 'District' in subset.columns:
+        district_activity = subset.groupby('District')['Enrolment'].sum().reset_index()
+        # Get top 3 active districts
+        top_districts = district_activity.sort_values('Enrolment', ascending=False).head(3)
+        
+        for _, row in top_districts.iterrows():
+            # In a real time-series, we'd pick a specific month. 
+            # Here we simulate specific event detection context.
+            # We'll assumne the "latest" period available in data is the context.
+            
+            # Create a Discovery Object
+            rd = ReasonDiscovery(
+                pattern="High Enrolment Spike", 
+                date_found="Recent Quarter", 
+                location=row['District'], 
+                metric_val=f"{int(row['Enrolment'])} ops"
+            )
+            # Find Pattern
+            rd.find_reasons()
+            discoveries.append(rd)
+
+    # 2. Detect High Rejections
+    if 'Rejections' in subset.columns:
+        rej_subset = subset[subset['Rejections'] > 0]
+        if not rej_subset.empty:
+             high_rej = rej_subset.sort_values('Rejections', ascending=False).head(2)
+             for _, row in high_rej.iterrows():
+                 rd = ReasonDiscovery(
+                    pattern="Abnormal Rejection Rate",
+                    date_found="Recent Quarter",
+                    location=row['District'],
+                    metric_val=f"{int(row['Rejections'])} rejections"
+                 )
+                 rd.find_reasons()
+                 discoveries.append(rd)
+
+    return [d.to_dict() for d in discoveries]

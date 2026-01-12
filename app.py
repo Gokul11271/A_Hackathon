@@ -5,7 +5,8 @@ from utils.data_loader import load_data, load_geojson, load_district_geojson
 from utils.map_renderer import render_india_map
 import plotly.express as px
 import plotly.graph_objects as go
-from utils.analysis_engine import get_recommendations
+from utils.analysis_engine import get_recommendations, get_reason_discovery
+from utils.anomaly_engine import AnomalyEngine
 import time
 
 # --- PAGE CONFIGURATION ---
@@ -127,7 +128,7 @@ if selected_district != "All Districts":
 st.markdown("---")
 
 # --- MAIN TABS ---
-tab1, tab2 = st.tabs(["📊 National Dashboard", "💡 Smart Recommendations"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 National Dashboard", "💡 Smart Recommendations", "🧠 Reason Discovery", "⚠️ Anomaly Detection"])
 
 # ================= TAB 1: DASHBOARD =================
 with tab1:
@@ -452,3 +453,169 @@ with tab2:
     
     st.plotly_chart(fig_scatter, use_container_width=True)
     st.caption("Size of bubble represents Biometric Updates (5-17). Small bubbles with high X-value (Enrolment) indicate missed mandatory updates.")
+
+# ================= TAB 3: REASON DISCOVERY =================
+with tab3:
+    st.subheader("🧠 Reason Discovery: Contextual Intelligence")
+    st.markdown("""
+    **The Differentiator:** Correlating internal data anomalies with external real-world events.
+    This module uses **Live Web Scraping** to find potential reasons for spikes in enrolment or rejection rates.
+    """)
+    
+    st.info("ℹ️ This feature performs a live web search for news articles related to identified data patterns.")
+    
+    if st.button("🔍 Run Anomaly Correlation Analysis"):
+        with st.spinner("Analyzing anomalies and scraping news sources..."):
+            # Use current filters
+            rd_state = selected_state
+            rd_dist = None if selected_district == "All Districts" else selected_district
+            
+            discoveries = get_reason_discovery(df, rd_state, rd_dist)
+            
+        if not discoveries:
+            st.success("No significant anomalies detected requiring external explanation.")
+        else:
+            # Format for display: Make the Source clickable
+            display_rows = []
+            for d in discoveries:
+                # Markdown link for Source if Link exists
+                link_url = d.get('Link', '#')
+                source_text = d.get('Source', 'Web')
+                
+                # We'll create a new dict for display
+                display_rows.append({
+                    "Observed Pattern": d['Pattern'],
+                    "Date Context": d['Date'],
+                    "Possible External Reason": d['Possible Reason'],
+                    "Source": f"[{source_text}]({link_url})" # Markdown for st.markdown table or similar
+                })
+                
+            rdf = pd.DataFrame(display_rows)
+            # Use to_markdown for clickable links in st.markdown, or st.data_editor with column configuration
+            # st.table doesn't render markdown links automatically. st.markdown(df.to_markdown()) does.
+            
+            st.markdown(rdf.to_markdown(index=False))
+            
+            st.caption("Auto-generated correlations based on open-web intelligence.")
+
+# ================= TAB 4: ADVANCED ANOMALY DETECTION =================
+with tab4:
+    st.subheader("⚠️ Advanced Anomaly Detection System")
+    st.markdown("Identifies statistical irregularities using Isolation Forest, Z-Score, and Spatial Analysis.")
+    
+    # Init Engine
+    ae = AnomalyEngine(df)
+    
+    # Run detections
+    vol_anomalies = ae.detect_volume_anomalies(region_type='District')
+    age_anomalies = ae.detect_age_structure_anomalies(region_type='District')
+    spatial_anomalies = ae.detect_spatial_anomalies()
+    
+    # --- SUMMARY METRICS ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Volume Anomalies", len(vol_anomalies), help="Districts with extreme traffic (Z > 2.5)")
+    m2.metric("Age Structure Risks", len(age_anomalies), help="Districts with skewed demographics")
+    m3.metric("Spatial Outliers", len(spatial_anomalies), help="Districts disconnected from state trends")
+    
+    st.markdown("---")
+
+    # --- 1. VOLUME ANOMALIES (Interactive Scatter) ---
+    st.markdown("#### 📉 Volume Analysis: Outlier Detection")
+    if not vol_anomalies.empty:
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            # Visualize Anomalies vs Normal used Scatter
+            # We need the full dataset context to show 'Normal' vs 'Anomaly'
+            # Let's quickly re-aggregate for the plot
+            plot_df = df.groupby('District')[['Enrolment', 'Updates']].sum().reset_index()
+            # Mark anomalies
+            plot_df['Type'] = 'Normal'
+            plot_df.loc[plot_df['District'].isin(vol_anomalies['District']), 'Type'] = 'Anomaly'
+            
+            fig_vol = px.scatter(
+                plot_df, 
+                x="Enrolment", 
+                y="Updates", 
+                color="Type",
+                hover_name="District",
+                color_discrete_map={'Normal': '#aec7e8', 'Anomaly': '#d62728'},
+                title="District Clusters: Enrolment vs Updates",
+                size='Enrolment'
+            )
+            st.plotly_chart(fig_vol, use_container_width=True)
+            
+        with c2:
+            st.warning(f"**{len(vol_anomalies)} Critical Districts Found**")
+            st.dataframe(
+                vol_anomalies[['District', 'Reason']],
+                hide_index=True,
+                use_container_width=True
+            )
+    else:
+        st.success("✅ No volume anomalies detected. Traffic is consistent.")
+
+    st.markdown("---")
+
+    # --- 2. AGE STRUCTURE ANALYSIS (Stacked Bar) ---
+    st.markdown("#### 👶 Age Structure Demographics")
+    if not age_anomalies.empty:
+        st.caption("Comparing anomalous districts against the National Average distribution.")
+        
+        # Prepare data for plotting: Top 5 Anomalies vs National Avg
+        top_anom = age_anomalies.head(5).copy()
+        
+        # Calculate National Avg for comparison row
+        nat_avg = df[['age_0_5', 'age_5_17', 'age_18_greater']].sum()
+        nat_row = pd.DataFrame([{
+            'District': 'National Average',
+            'age_0_5': nat_avg['age_0_5'],
+            'age_5_17': nat_avg['age_5_17'],
+            'age_18_greater': nat_avg['age_18_greater'],
+            'Reason': 'Benchmark'
+        }])
+        
+        # Combine
+        comp_df = pd.concat([top_anom[['District', 'age_0_5', 'age_5_17', 'age_18_greater']], nat_row])
+        
+        # Normalize to 100% for comparison
+        comp_df['Total'] = comp_df[['age_0_5', 'age_5_17', 'age_18_greater']].sum(axis=1)
+        comp_df['0-5 %'] = (comp_df['age_0_5'] / comp_df['Total']) * 100
+        comp_df['5-17 %'] = (comp_df['age_5_17'] / comp_df['Total']) * 100
+        comp_df['18+ %'] = (comp_df['age_18_greater'] / comp_df['Total']) * 100
+        
+        fig_age = px.bar(
+            comp_df,
+            x='District',
+            y=['0-5 %', '5-17 %', '18+ %'],
+            title="Age Composition: Anomalies vs Benchmark",
+            color_discrete_sequence=['#636EFA', '#EF553B', '#00CC96']
+        )
+        st.plotly_chart(fig_age, use_container_width=True)
+        
+        with st.expander("View Detailed Age Data"):
+            st.dataframe(top_anom[['District', 'Structure_Divergence', 'age_0_5', 'age_5_17']], use_container_width=True)
+            
+    else:
+        st.success("✅ Age demographics are consistent across all regions.")
+
+    st.markdown("---")
+
+    # --- 3. SPATIAL OUTLIERS ---
+    st.markdown("#### 🗺️ Spatial Context Analysis")
+    if not spatial_anomalies.empty:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.dataframe(
+                spatial_anomalies[['State', 'District', 'Enrolment', 'Reason']],
+                hide_index=True,
+                use_container_width=True
+            )
+        with c2:
+            st.info("""
+            **What is a Spatial Outlier?**
+            A district is flagged if its Enrolment volume is significantly higher or lower (> 3.5 Modified Z-Score) than the median of other districts in the **same state**.
+            
+            This helps isolate localized issues (e.g., a specific district center shutdown) vs state-wide trends.
+            """)
+    else:
+        st.success("✅ No spatial outliers detected.")
