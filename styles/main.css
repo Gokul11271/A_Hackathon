@@ -1,0 +1,112 @@
+/* Import premium fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Global Styles */
+.main {
+    background-color: #fcfcfc;
+    /* Very light subtle grey/white */
+    font-family: 'Inter', sans-serif;
+}
+
+/* Sidebar Styling */
+[data-testid="stSidebar"] {
+    background-color: #ffffff;
+    border-right: 1px solid #f0f0f0;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.02);
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #333;
+}
+
+/* Titles */
+h1,
+h2,
+h3,
+h4 {
+    font-family: 'Inter', sans-serif;
+    color: #111;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+/* Metrics Cards - Glassmorphic / Premium Cards */
+div[data-testid="metric-container"] {
+    background: #ffffff;
+    border: 1px solid #eaeaea;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+    transition: all 0.3s ease;
+}
+
+div[data-testid="metric-container"]:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+    border-color: #d0d0d0;
+}
+
+/* Value styling in metrics */
+div[data-testid="metric-container"] label {
+    font-weight: 500;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
+    font-weight: 700;
+    color: #000;
+    font-size: 1.8rem;
+}
+
+/* Map Container */
+.stPlotlyChart {
+    background-color: #ffffff;
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+    border: 1px solid #f0f0f0;
+}
+
+/* Buttons */
+.stButton>button {
+    background-color: #ffffff;
+    color: #333;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.stButton>button:hover {
+    border-color: #333;
+    background-color: #f9f9f9;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.stButton>button:active {
+    background-color: #f0f0f0;
+}
+
+/* DataFrame / Tables */
+div[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    border: 1px solid #eee;
+    overflow: hidden;
+}
+
+/* Hide Streamlit Chrome */
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+header {
+    visibility: hidden;
+}
