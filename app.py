@@ -7,6 +7,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from utils.analysis_engine import get_recommendations, get_reason_discovery
 from utils.anomaly_engine import AnomalyEngine
+from utils.temporal_engine import TemporalEngine
+from utils.ui_components import render_marquee, handle_marquee_click
 import time
 
 # --- PAGE CONFIGURATION ---
@@ -40,6 +42,7 @@ district_geojson = load_district_geojson()
 if df.empty or not state_geojson:
     st.error("Data loading failed. Please check data files.")
     st.stop()
+
 
 
 
@@ -108,6 +111,14 @@ with st.container():
             
        st.multiselect(search_label, search_items, key="navbar_search")
 
+# --- MARQUEE RECOMMENDATION SYSTEM (Contextual) ---
+# Fetch recommendations based on current selection
+mq_state_filter = selected_state
+mq_dist_filter = None if selected_district == "All Districts" else selected_district
+
+marquee_recs = get_recommendations(df, state_filter=mq_state_filter, district_filter=mq_dist_filter)
+handle_marquee_click(marquee_recs)
+render_marquee(marquee_recs)
 
 # --- DATA FILTERING ---
 selected_year = df['Year'].max()
@@ -128,7 +139,7 @@ if selected_district != "All Districts":
 st.markdown("---")
 
 # --- MAIN TABS ---
-tab1, tab2, tab3, tab4 = st.tabs(["📊 National Dashboard", "💡 Smart Recommendations", "🧠 Reason Discovery", "⚠️ Anomaly Detection"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 National Dashboard", "💡 Smart Recommendations", "🧠 Reason Discovery", "⚠️ Anomaly Detection", "⏳ Temporal Analysis"])
 
 # ================= TAB 1: DASHBOARD =================
 with tab1:
@@ -619,3 +630,48 @@ with tab4:
             """)
     else:
         st.success("✅ No spatial outliers detected.")
+
+# ================= TAB 5: TEMPORAL ANALYSIS =================
+with tab5:
+    st.subheader("⏳ Temporal Pattern Analysis: Metro vs Non-Metro")
+    
+    with st.expander("ℹ️  Included Metro Regions"):
+        st.write(", ".join(sorted(TemporalEngine.METRO_DISTRICTS)))
+        
+    st.markdown("Analyze seasonal variations to predict peak demand periods and optimize resource allocation.")
+    
+    te = TemporalEngine(df)
+    metro_trends = te.get_metro_trends()
+    
+    if not metro_trends.empty:
+        # 1. Visualization
+        col_chart, col_rec = st.columns([3, 1])
+        
+        with col_chart:
+            fig_temp = te.plot_metro_comparison(metro_trends)
+            if fig_temp:
+                st.plotly_chart(fig_temp, use_container_width=True)
+            else:
+                st.info("No temporal data available for plotting.")
+            
+        # 2. Peak Detection & Recommendations
+        with col_rec:
+            st.markdown("#### 🚀 Peak Demand Alerts")
+            peaks = te.detect_peak_periods(metro_trends)
+            
+            if peaks:
+                for p in peaks:
+                    with st.container():
+                        st.warning(f"**{p['Month']} Peak**")
+                        st.caption(f"Volume: {int(p['Volume']):,}")
+                        st.info(p['Recommendation'])
+                        st.markdown("---")
+            else:
+                st.success("Demand is stable throughout the year.")
+                
+        # 3. Data View
+        with st.expander("View Underlying Data"):
+            st.dataframe(metro_trends, use_container_width=True)
+            
+    else:
+        st.warning("Insufficient temporal data (Month/Date) to generate analysis. Please ensure your dataset includes a Date column.")
