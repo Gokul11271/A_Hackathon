@@ -261,11 +261,11 @@ with tab1:
                     tick_vals = data[x_col]
 
                 fig.update_layout(
-                    title=dict(text=title, font=dict(color='black', size=14)),
+                    title=dict(text=title, font=dict(color='white', size=14)),
                     xaxis=dict(
                         showgrid=False, 
                         showticklabels=True, 
-                        tickfont=dict(color='black'),
+                        tickfont=dict(color='white'),
                         title=None,
                         tickformat=tick_fmt,
                         tickmode=tick_mode,
@@ -274,7 +274,7 @@ with tab1:
                     yaxis=dict(
                         showgrid=True, 
                         gridcolor='rgba(128,128,128,0.2)', 
-                        tickfont=dict(color='black'),
+                        tickfont=dict(color='white'),
                         title=None
                     ),
                     plot_bgcolor='rgba(0,0,0,0)',
