@@ -5,7 +5,7 @@ from utils.data_loader import load_data, load_geojson, load_district_geojson
 from utils.map_renderer import render_india_map
 import plotly.express as px
 import plotly.graph_objects as go
-from utils.analysis_engine import get_recommendations, get_reason_discovery
+from utils.analysis_engine import get_recommendations
 from utils.anomaly_engine import AnomalyEngine
 from utils.temporal_engine import TemporalEngine
 from utils.ui_components import render_marquee, handle_marquee_click
@@ -139,7 +139,7 @@ if selected_district != "All Districts":
 st.markdown("---")
 
 # --- MAIN TABS ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 National Dashboard", "💡 Smart Recommendations", "🧠 Reason Discovery", "⚠️ Anomaly Detection", "⏳ Temporal Analysis"])
+tab1, tab2, tab4, tab5 = st.tabs(["National Dashboard", "Smart Recommendations", "Anomaly Detection", "Temporal Analysis"])
 
 # ================= TAB 1: DASHBOARD =================
 with tab1:
@@ -464,50 +464,6 @@ with tab2:
     
     st.plotly_chart(fig_scatter, use_container_width=True)
     st.caption("Size of bubble represents Biometric Updates (5-17). Small bubbles with high X-value (Enrolment) indicate missed mandatory updates.")
-
-# ================= TAB 3: REASON DISCOVERY =================
-with tab3:
-    st.subheader("🧠 Reason Discovery: Contextual Intelligence")
-    st.markdown("""
-    **The Differentiator:** Correlating internal data anomalies with external real-world events.
-    This module uses **Live Web Scraping** to find potential reasons for spikes in enrolment or rejection rates.
-    """)
-    
-    st.info("ℹ️ This feature performs a live web search for news articles related to identified data patterns.")
-    
-    if st.button("🔍 Run Anomaly Correlation Analysis"):
-        with st.spinner("Analyzing anomalies and scraping news sources..."):
-            # Use current filters
-            rd_state = selected_state
-            rd_dist = None if selected_district == "All Districts" else selected_district
-            
-            discoveries = get_reason_discovery(df, rd_state, rd_dist)
-            
-        if not discoveries:
-            st.success("No significant anomalies detected requiring external explanation.")
-        else:
-            # Format for display: Make the Source clickable
-            display_rows = []
-            for d in discoveries:
-                # Markdown link for Source if Link exists
-                link_url = d.get('Link', '#')
-                source_text = d.get('Source', 'Web')
-                
-                # We'll create a new dict for display
-                display_rows.append({
-                    "Observed Pattern": d['Pattern'],
-                    "Date Context": d['Date'],
-                    "Possible External Reason": d['Possible Reason'],
-                    "Source": f"[{source_text}]({link_url})" # Markdown for st.markdown table or similar
-                })
-                
-            rdf = pd.DataFrame(display_rows)
-            # Use to_markdown for clickable links in st.markdown, or st.data_editor with column configuration
-            # st.table doesn't render markdown links automatically. st.markdown(df.to_markdown()) does.
-            
-            st.markdown(rdf.to_markdown(index=False))
-            
-            st.caption("Auto-generated correlations based on open-web intelligence.")
 
 # ================= TAB 4: ADVANCED ANOMALY DETECTION =================
 with tab4:
