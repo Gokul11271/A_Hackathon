@@ -9,6 +9,7 @@ from utils.analysis_engine import get_recommendations
 from utils.anomaly_engine import AnomalyEngine
 from utils.temporal_engine import TemporalEngine
 from utils.ui_components import render_marquee, handle_marquee_click
+from utils.analytics_engine import AnalyticsEngine
 import time
 
 # --- PAGE CONFIGURATION ---
@@ -45,6 +46,53 @@ district_geojson = load_district_geojson()
 if df.empty or not state_geojson:
     st.error("Data loading failed. Please check data files.")
     st.stop()
+
+# --- ADVANCED FILTERS SIDEBAR ---
+with st.sidebar:
+    st.header("Advanced Filters")
+    
+    # Date range filter (if temporal data available)
+    if 'datestamp' in df.columns:
+        min_date = df['datestamp'].min()
+        max_date = df['datestamp'].max()
+        
+        date_range = st.date_input(
+            "Date Range",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            key="date_filter"
+        )
+        
+        # Apply date filter
+        if len(date_range) == 2:
+            df = df[(df['datestamp'] >= pd.Timestamp(date_range[0])) & 
+                   (df['datestamp'] <= pd.Timestamp(date_range[1]))]
+    
+    st.divider()
+    
+    # Age group filter
+    st.subheader("Demographics")
+    age_filter = st.multiselect(
+        "Age Groups",
+        ["0-5", "5-17", "18+"],
+        default=["0-5", "5-17", "18+"],
+        key="age_filter"
+    )
+    
+    # Update type filter
+    st.subheader("Update Types")
+    show_demo = st.checkbox("Demographic Updates", value=True, key="show_demo")
+    show_bio = st.checkbox("Biometric Updates", value=True, key="show_bio")
+    
+    st.divider()
+    
+    # Quick stats
+    st.subheader("Quick Stats")
+    st.metric("Total States", df['State'].nunique())
+    st.metric("Total Districts", df['District'].nunique())
+    st.metric("Data Points", len(df))
+
 
 
 
@@ -146,255 +194,558 @@ tab1, tab2, tab4, tab5 = st.tabs(["National Dashboard", "Smart Recommendations",
 
 # ================= TAB 1: DASHBOARD =================
 with tab1:
-    # --- LIVE DATA METRICS ---
-    st.subheader(f"Live Data Overview: {display_location}")
-
+    # --- ENHANCED KPI CARDS WITH TRENDS ---
+    st.subheader(f"Key Performance Indicators: {display_location}")
+    
+    # Initialize analytics engine
+    analytics = AnalyticsEngine(df)
+    
+    # Calculate current metrics
     total_enrol = metric_df['Enrolment'].sum()
     total_updates = metric_df['Updates'].sum()
-
     demo_updates = (metric_df['demo_age_5_17'] + metric_df['demo_age_17_']).sum()
     bio_updates = (metric_df['bio_age_5_17'] + metric_df['bio_age_17_']).sum()
-
+    
+    # Calculate trends if temporal data available
+    enrol_trend = analytics.calculate_trends(metric_df, 'Enrolment')
+    update_trend = analytics.calculate_trends(metric_df, 'Updates')
+    
+    # Display KPI cards
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Enrolment", f"{total_enrol:,.0f}", delta="New")
-    m2.metric("Total Updates", f"{total_updates:,.0f}")
-    m3.metric("Demographic Updates", f"{demo_updates:,.0f}", help="Name, Address, DOB, etc.")
-    m4.metric("Biometric Updates", f"{bio_updates:,.0f}", help="Fingerprint, Iris, Photo")
-
-    st.markdown("---")
-
-    # --- MAP SECTION ---
-    st.subheader("Geospatial Analysis")
-    map_metric = st.radio("Map Layer:", ["Enrolment", "Updates"], horizontal=True)
-
-    fig = render_india_map(
-        df, 
-        state_geojson, 
-        district_geojson, 
-        map_metric, 
-        selected_year, 
-        st.session_state['selected_state']
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- STATE RANKING CHART ---
-    st.subheader("Regional Performance Ranking")
-
-    if st.session_state['view_mode'] == 'India':
-        rank_df = filtered_df.groupby('State')[['Enrolment', 'Updates', 'Demographic Updates', 'Biometric Updates']].sum().reset_index()
-        rank_df = rank_df.sort_values('Enrolment', ascending=False)
-        y_col = 'Enrolment'
-        x_col = 'State' 
-        title_chart = "State-wise Enrolment Ranking (High to Low)"
-    else:
-        rank_df = metric_df.groupby('District')[['Enrolment', 'Updates', 'Demographic Updates', 'Biometric Updates']].sum().reset_index()
-        rank_df = rank_df.sort_values('Enrolment', ascending=False)
-        y_col = 'Enrolment'
-        x_col = 'District'
-        title_chart = "District-wise Enrolment Ranking"
-
-    fig_rank = px.bar(
-        rank_df,
-        x=x_col,
-        y=y_col,
-        color=y_col,
-        title=title_chart,
-        color_continuous_scale='Viridis',
-        template="plotly_white"
-    )
-    fig_rank.update_layout(plot_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig_rank, use_container_width=True)
-
-
-    # --- REGIONAL BREAKDOWN (Table) ---
-    st.subheader("Detailed Regional Breakdown")
-    st.dataframe(
-        rank_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Enrolment": st.column_config.ProgressColumn("Enrolment", format="%d", min_value=0, max_value=int(rank_df['Enrolment'].max())),
-            "Updates": st.column_config.NumberColumn("Overall Updates", format="%d"),
-            "Demographic Updates": st.column_config.NumberColumn("Demographic Updates", format="%d"),
-            "Biometric Updates": st.column_config.NumberColumn("Biometric Updates", format="%d"),
-        }
-    )
-
-    st.markdown("---")
-
-    # --- QUARTERLY ANALYSIS ---
-    if 'Quarter' in metric_df.columns:
-        st.subheader("Quarterly Analysis (2025) - Trend Overview")
-        
-        # Prepare Data: Use Daily aggregation for granular "Trends"
-        # Ensure we have datestamp
-        if 'datestamp' in metric_df.columns:
-            trend_df = metric_df.groupby('datestamp')[['Enrolment', 'Updates']].sum().reset_index()
-            trend_df = trend_df.sort_values('datestamp')
-            x_axis_col = 'datestamp'
+    
+    with m1:
+        if enrol_trend:
+            delta_val = f"{enrol_trend['change_pct']:+.1f}%"
+            m1.metric(
+                "Total Enrolment", 
+                f"{total_enrol:,.0f}", 
+                delta=delta_val,
+                delta_color="normal" if enrol_trend['trend'] == 'up' else "inverse"
+            )
         else:
-            # Fallback if datestamp missing
-            trend_df = metric_df.groupby(['Month', 'MonthOrder'])[['Enrolment', 'Updates']].sum().reset_index()
-            trend_df = trend_df.sort_values('MonthOrder')
-            x_axis_col = 'Month'
+            m1.metric("Total Enrolment", f"{total_enrol:,.0f}")
+    
+    with m2:
+        if update_trend:
+            delta_val = f"{update_trend['change_pct']:+.1f}%"
+            m2.metric(
+                "Total Updates", 
+                f"{total_updates:,.0f}",
+                delta=delta_val,
+                delta_color="normal" if update_trend['trend'] == 'up' else "inverse"
+            )
+        else:
+            m2.metric("Total Updates", f"{total_updates:,.0f}")
+    
+    with m3:
+        update_rate = (total_updates / total_enrol * 100) if total_enrol > 0 else 0
+        m3.metric(
+            "Update Rate", 
+            f"{update_rate:.1f}%",
+            help="Percentage of enrolments with updates"
+        )
+    
+    with m4:
+        bio_rate = (bio_updates / total_updates * 100) if total_updates > 0 else 0
+        m4.metric(
+            "Biometric Rate", 
+            f"{bio_rate:.1f}%",
+            help="Biometric updates as % of total updates"
+        )
+    
+    # --- AUTO-GENERATED INSIGHTS PANEL ---
+    with st.expander("Key Insights & Patterns", expanded=True):
+        insights = analytics.generate_insights(metric_df, display_location)
         
-        if not trend_df.empty:
-            c1, c2 = st.columns(2)
+        if insights:
+            cols = st.columns(len(insights))
+            for idx, insight in enumerate(insights):
+                with cols[idx]:
+                    if insight['type'] == 'success':
+                        st.success(f"**{insight['title']}**\n\n{insight['message']}")
+                    elif insight['type'] == 'warning':
+                        st.warning(f"**{insight['title']}**\n\n{insight['message']}")
+                    else:
+                        st.info(f"**{insight['title']}**\n\n{insight['message']}")
+        else:
+            st.info("Analyzing patterns... More data needed for insights.")
+
+    st.markdown("---")
+
+    # --- MAIN GRID: 2:1 SPLIT ---
+    # Col 1: Map (67%)
+    # Col 2: Ranking + Demographics (33%)
+    
+    col_map, col_right = st.columns([2, 1], gap="medium")
+
+    # === COLUMN 1: MAP ===
+    with col_map:
+        with st.container(border=True):
+            st.subheader("Geospatial Analysis")
+            map_metric = st.radio("Map Layer:", ["Enrolment", "Updates"], horizontal=True, label_visibility="collapsed")
+
+            try:
+                fig = render_india_map(
+                    df, 
+                    state_geojson, 
+                    district_geojson, 
+                    map_metric, 
+                    selected_year, 
+                    st.session_state['selected_state']
+                )
+                # Increase map height to match the stacked right column
+                fig.update_layout(height=650, margin=dict(l=0, r=0, t=0, b=0))
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Map rendering failed: {e}")
+                st.caption("Try filtering by State to reduce memory usage.")
+
+    # === COLUMN 2: RIGHT PANEL ===
+    with col_right:
+        # --- SECTION A: INTERACTIVE RANKING ---
+        with st.container(border=True):
+            # Metric selector
+            col_title, col_metric = st.columns([2, 1])
+            with col_title:
+                st.subheader("Regional Rankings")
+            with col_metric:
+                rank_metric = st.selectbox(
+                    "Metric",
+                    ["Enrolment", "Updates", "Update Rate"],
+                    label_visibility="collapsed",
+                    key="rank_metric_selector"
+                )
             
-            # --- HELPER TO CREATE STOCK-LIKE AREA CHART ---
-            def create_area_chart(data, x_col, y_col, title, color_hex, fill_color_rgba):
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=data[x_col],
-                    y=data[y_col],
-                    mode='lines',  # Remove markers for cleaner daily view
-                    fill='tozeroy',
-                    line=dict(color=color_hex, width=2),
-                    # marker=dict(size=10), # specific markers too noisy for daily
-                    fillcolor=fill_color_rgba,
-                    name=title
-                ))
+            if st.session_state['view_mode'] == 'India':
+                rank_df = filtered_df.groupby('State')[['Enrolment', 'Updates']].sum().reset_index()
+                x_col = 'State'
+            else:
+                rank_df = metric_df.groupby('District')[['Enrolment', 'Updates']].sum().reset_index()
+                x_col = 'District'
+            
+            # Calculate derived metrics
+            rank_df['Update Rate'] = (rank_df['Updates'] / rank_df['Enrolment'] * 100).fillna(0)
+            
+            # Sort by selected metric
+            rank_df = rank_df.sort_values(rank_metric, ascending=False)
+            
+            # Color scale based on metric
+            color_scale = 'Viridis' if rank_metric in ['Enrolment', 'Updates'] else 'RdYlGn'
+            
+            fig_rank = px.bar(
+                rank_df,
+                x=x_col,
+                y=rank_metric,
+                color=rank_metric,
+                color_continuous_scale=color_scale,
+                template="plotly_white",
+                hover_data={'Enrolment': ':,.0f', 'Updates': ':,.0f', 'Update Rate': ':.1f%'}
+            )
+            fig_rank.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=300,
+                xaxis=dict(title=None, tickangle=-45),
+                yaxis=dict(title=None),
+                margin=dict(l=0, r=0, t=0, b=0),
+                coloraxis_showscale=False
+            )
+            st.plotly_chart(fig_rank, use_container_width=True)
+
+        # --- SECTION B: ENHANCED DEMOGRAPHICS ---
+        with st.container(border=True):
+            st.subheader("Demographics")
+            st.caption("Distribution of enrolments across age groups and update types.")
+            
+            # Age distribution pie chart
+            age_0_5 = metric_df['age_0_5'].sum()
+            age_5_17 = metric_df['age_5_17'].sum()
+            age_18_plus = metric_df['age_18_greater'].sum()
+            
+            pie_data = pd.DataFrame({
+                'Age Group': ['0-5', '5-17', '18+'],
+                'Count': [age_0_5, age_5_17, age_18_plus]
+            })
+            
+            fig_pie = px.pie(
+                pie_data, 
+                names='Age Group', 
+                values='Count', 
+                color='Age Group',
+                color_discrete_map={'0-5':'#636EFA', '5-17':'#EF553B', '18+':'#00CC96'},
+                hole=0.5,
+                template="plotly_white"
+            )
+            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+            fig_pie.update_layout(
+                showlegend=False, 
+                margin=dict(t=0, b=0, l=0, r=0),
+                height=180
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+            
+            # Update type breakdown
+            st.markdown("**Update Distribution**")
+            demo_total = (metric_df['demo_age_5_17'] + metric_df['demo_age_17_']).sum()
+            bio_total = (metric_df['bio_age_5_17'] + metric_df['bio_age_17_']).sum()
+            
+            update_data = pd.DataFrame({
+                'Type': ['Demographic', 'Biometric'],
+                'Count': [demo_total, bio_total]
+            })
+            
+            fig_update = px.bar(
+                update_data,
+                x='Type',
+                y='Count',
+                color='Type',
+                color_discrete_map={'Demographic': '#FFA15A', 'Biometric': '#AB63FA'},
+                template="plotly_white"
+            )
+            fig_update.update_layout(
+                showlegend=False,
+                height=150,
+                margin=dict(l=0, r=0, t=0, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(title=None),
+                yaxis=dict(title=None, showticklabels=False)
+            )
+            st.plotly_chart(fig_update, use_container_width=True)
+
+    st.markdown("---")
+
+    # --- TIME-SERIES TREND ANALYSIS ---
+    st.subheader("Trend Analysis Over Time")
+    
+    if 'datestamp' in metric_df.columns and not metric_df.empty:
+        col_trend_left, col_trend_right = st.columns([3, 1])
+        
+        with col_trend_right:
+            # Metric selector for trend
+            trend_metrics = st.multiselect(
+                "Select Metrics",
+                ["Enrolment", "Updates", "Demographic Updates", "Biometric Updates"],
+                default=["Enrolment", "Updates"],
+                key="trend_metric_selector"
+            )
+        
+        with col_trend_left:
+            if trend_metrics:
+                # Prepare time-series data
+                ts_data = metric_df.groupby('datestamp')[trend_metrics].sum().reset_index()
+                ts_data = ts_data.sort_values('datestamp')
                 
-                # Determine Tick Format based on granularity
-                if x_col == 'datestamp':
-                    tick_fmt = "%d %b" # e.g. 01 Jan
-                    # tick_mode = 'auto' # let plotly handle it
-                else:
-                    tick_fmt = None
-                    # tick_mode = 'array'
+                # Create multi-line chart
+                fig_trend = go.Figure()
                 
-                fig.update_layout(
-                    title=dict(text=title, font=dict(size=14)),
-                    xaxis=dict(
-                        showgrid=False, 
-                        showticklabels=True, 
-                        title=None,
-                        tickformat=tick_fmt
-                    ),
-                    yaxis=dict(
-                        showgrid=True, 
-                        gridcolor='rgba(128,128,128,0.2)', 
-                        title=None
-                    ),
+                colors = {'Enrolment': '#00A389', 'Updates': '#3B82F6', 
+                         'Demographic Updates': '#FFA15A', 'Biometric Updates': '#AB63FA'}
+                
+                for metric in trend_metrics:
+                    fig_trend.add_trace(go.Scatter(
+                        x=ts_data['datestamp'],
+                        y=ts_data[metric],
+                        mode='lines+markers',
+                        name=metric,
+                        line=dict(color=colors.get(metric, '#666'), width=3),
+                        marker=dict(size=6)
+                    ))
+                
+                fig_trend.update_layout(
+                    height=350,
+                    margin=dict(l=0, r=0, t=20, b=0),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(t=40, l=10, r=10, b=40),
-                    showlegend=False,
-                    hovermode="x unified"
+                    xaxis=dict(
+                        title="Date",
+                        showgrid=True,
+                        gridcolor='rgba(128,128,128,0.1)'
+                    ),
+                    yaxis=dict(
+                        title="Count",
+                        showgrid=True,
+                        gridcolor='rgba(128,128,128,0.1)'
+                    ),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="right",
+                        x=1
+                    ),
+                    hovermode='x unified'
                 )
-                return fig
-
-            # 1. Enrolment Chart (Greenish like the image)
-            with c1:
-                fig_enrol = create_area_chart(
-                    trend_df, x_axis_col, 'Enrolment', 
-                    "Enrolment Trend (Daily)", 
-                    "#00A389", # Strong Green
-                    "rgba(0, 163, 137, 0.1)" # Transparent Green fill
-                )
-                st.plotly_chart(fig_enrol, use_container_width=True)
                 
-            # 2. Updates Chart (Blueish/Orange to contrast)
-            with c2:
-                fig_update = create_area_chart(
-                    trend_df, x_axis_col, 'Updates', 
-                    "Updates Trend (Daily)", 
-                    "#3B82F6", # Bright Blue
-                    "rgba(59, 130, 246, 0.1)" # Transparent Blue fill
-                )
-                st.plotly_chart(fig_update, use_container_width=True)
-
-        else:
-            st.info("No trend data available.")
-            
+                st.plotly_chart(fig_trend, use_container_width=True)
+            else:
+                st.info("Select at least one metric to view trends")
     else:
-        st.info("Quarterly data attribute missing. Please check data loader.")
+        st.info("Time-series data not available. Trends require date information.")
 
     st.markdown("---")
 
-    # ================= DETAILED INSIGHTS SECTION =================
-    st.subheader("🔍 Detailed Insights & Demographics")
-
-    # Row 1: Pie Chart (Demographics) & Line Chart (Update Types Trend)
-    row1_c1, row1_c2 = st.columns(2)
-
-    with row1_c1:
-        st.markdown("#### 🥧 Demographic Share (Age Groups)")
-        # Calculate Age Sums
-        age_0_5 = metric_df['age_0_5'].sum()
-        age_5_17 = metric_df['age_5_17'].sum()
-        age_18_plus = metric_df['age_18_greater'].sum()
+    # --- COMPARATIVE ANALYTICS & GROWTH RATES ---
+    st.subheader("Comparative Analytics")
+    
+    col_growth, col_benchmark = st.columns(2)
+    
+    with col_growth:
+        st.markdown("**Growth Rate Analysis**")
         
-        pie_data = pd.DataFrame({
-            'Age Group': ['0-5 Years', '5-17 Years', '18+ Years'],
-            'Count': [age_0_5, age_5_17, age_18_plus]
-        })
-        
-        fig_pie = px.pie(
-            pie_data, 
-            names='Age Group', 
-            values='Count', 
-            color='Age Group',
-            color_discrete_map={'0-5 Years':'#636EFA', '5-17 Years':'#EF553B', '18+ Years':'#00CC96'},
-            hole=0.4,
-            template="plotly_white"
+        # Calculate growth rates
+        growth_df = analytics.calculate_growth_rates(
+            metric_df, 
+            'State' if st.session_state['view_mode'] == 'India' else 'District'
         )
-        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    with row1_c2:
-        st.markdown("#### 📈 Update Type Trends (Demo vs Bio)")
-        if 'datestamp' in metric_df.columns:
-            # Group by date for Demo vs Bio
-            update_trend = metric_df.groupby('datestamp')[['Demographic Updates', 'Biometric Updates']].sum().reset_index()
-            update_trend = update_trend.sort_values('datestamp')
+        
+        if not growth_df.empty and len(growth_df) > 0:
+            # Show top and bottom performers
+            top_5 = growth_df.nlargest(5, 'Growth_Rate')
+            bottom_5 = growth_df.nsmallest(5, 'Growth_Rate')
             
-            fig_line = go.Figure()
-            fig_line.add_trace(go.Scatter(x=update_trend['datestamp'], y=update_trend['Demographic Updates'], mode='lines', name='Demographic', line=dict(color='#FFA15A')))
-            fig_line.add_trace(go.Scatter(x=update_trend['datestamp'], y=update_trend['Biometric Updates'], mode='lines', name='Biometric', line=dict(color='#AB63FA')))
+            combined = pd.concat([top_5, bottom_5])
+            combined['Category'] = ['Top Growth'] * len(top_5) + ['Slow Growth'] * len(bottom_5)
             
-            fig_line.update_layout(
-                xaxis_title="Date", 
-                yaxis_title="Updates Count",
-                hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                template="plotly_white",
-                plot_bgcolor="rgba(0,0,0,0)"
+            group_col = 'State' if st.session_state['view_mode'] == 'India' else 'District'
+            
+            fig_growth = px.bar(
+                combined,
+                x=group_col,
+                y='Growth_Rate',
+                color='Category',
+                color_discrete_map={'Top Growth': '#00CC96', 'Slow Growth': '#EF553B'},
+                template="plotly_white"
             )
-            st.plotly_chart(fig_line, use_container_width=True)
+            fig_growth.update_layout(
+                height=300,
+                margin=dict(l=0, r=0, t=0, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(title=None, tickangle=-45),
+                yaxis=dict(title="Growth Rate (%)")
+            )
+            st.plotly_chart(fig_growth, use_container_width=True)
         else:
-            st.warning("Trend data unavailable.")
-
-    # Row 2: Bar Chart (District Comparison - Grouped)
-    st.markdown("#### 📊 Regional Comparison: Enrolment vs Updates")
+            st.info("Growth rate analysis requires temporal data")
+    
+    with col_benchmark:
+        st.markdown("**Performance Benchmarking**")
+        
+        # Calculate benchmarks
+        if st.session_state['view_mode'] == 'India':
+            national_avg = filtered_df.groupby('State')['Enrolment'].sum().mean()
+            state_totals = filtered_df.groupby('State')['Enrolment'].sum().reset_index()
+            state_totals['Benchmark'] = (state_totals['Enrolment'] / national_avg * 100)
+            state_totals['Status'] = state_totals['Benchmark'].apply(
+                lambda x: 'Above Average' if x > 100 else 'Below Average'
+            )
+            
+            # Show distribution
+            fig_bench = px.scatter(
+                state_totals,
+                x='Enrolment',
+                y='Benchmark',
+                color='Status',
+                size='Enrolment',
+                hover_name='State',
+                color_discrete_map={'Above Average': '#00CC96', 'Below Average': '#FFA500'},
+                template="plotly_white"
+            )
+            fig_bench.add_hline(y=100, line_dash="dash", line_color="gray", 
+                               annotation_text="National Average")
+            fig_bench.update_layout(
+                height=300,
+                margin=dict(l=0, r=0, t=0, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(title="Total Enrolment"),
+                yaxis=dict(title="% of National Avg")
+            )
+            st.plotly_chart(fig_bench, use_container_width=True)
+        else:
+            st.info("Benchmarking available in All India view")
+    
+    st.markdown("---")
+    
+    # --- HEATMAP VISUALIZATION ---
+    st.subheader("Regional Performance Heatmap")
     
     if st.session_state['view_mode'] == 'India':
-        comp_group = 'State'
-        limit = 10 # Top 10 States
-    else:
-        comp_group = 'District'
-        limit = 15 # Top 15 Districts
+        # Prepare heatmap data
+        heatmap_metrics = ['Enrolment', 'Updates', 'Update Rate']
+        heatmap_df = filtered_df.groupby('State')[['Enrolment', 'Updates']].sum().reset_index()
+        heatmap_df['Update Rate'] = (heatmap_df['Updates'] / heatmap_df['Enrolment'] * 100).fillna(0)
         
-    # Prepare Data
-    comp_df = metric_df.groupby(comp_group)[['Enrolment', 'Updates']].sum().reset_index()
-    # Sort by Enrolment and take top N
-    comp_df = comp_df.sort_values('Enrolment', ascending=False).head(limit)
+        # Normalize for heatmap (0-100 scale)
+        for metric in heatmap_metrics:
+            if heatmap_df[metric].max() > 0:
+                heatmap_df[f'{metric}_Norm'] = (heatmap_df[metric] / heatmap_df[metric].max() * 100)
+            else:
+                heatmap_df[f'{metric}_Norm'] = 0
+        
+        # Create matrix for heatmap
+        heatmap_matrix = heatmap_df[['State'] + [f'{m}_Norm' for m in heatmap_metrics]].set_index('State')
+        heatmap_matrix.columns = heatmap_metrics
+        
+        # Create heatmap
+        fig_heatmap = px.imshow(
+            heatmap_matrix.T,
+            labels=dict(x="State", y="Metric", color="Performance"),
+            x=heatmap_matrix.index,
+            y=heatmap_metrics,
+            color_continuous_scale='RdYlGn',
+            aspect="auto",
+            text_auto='.0f'
+        )
+        fig_heatmap.update_layout(
+            height=250,
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis=dict(tickangle=-45)
+        )
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+        st.caption("Normalized performance scores (0-100) across key metrics")
+    else:
+        st.info("Heatmap available in All India view")
     
-    # Melt for Grouped Bar
-    comp_df_melt = comp_df.melt(id_vars=comp_group, value_vars=['Enrolment', 'Updates'], var_name='Metric', value_name='Count')
+    st.markdown("---")
     
-    fig_bar_group = px.bar(
-        comp_df_melt, 
-        x=comp_group, 
-        y='Count', 
-        color='Metric', 
-        barmode='group',
-        color_discrete_map={'Enrolment': '#19D3F3', 'Updates': '#FF6692'},
-        text_auto='.2s',
-        template="plotly_white"
-    )
-    fig_bar_group.update_layout(xaxis_title=None, legend_title=None, plot_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig_bar_group, use_container_width=True)
+    # --- EXPORT FUNCTIONALITY ---
+    st.subheader("Export Data")
+    
+    col_export1, col_export2, col_export3 = st.columns(3)
+    
+    with col_export1:
+        # Export current view as CSV
+        export_df = metric_df[['State', 'District', 'Enrolment', 'Updates', 'age_0_5', 'age_5_17', 'age_18_greater']]
+        csv = export_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Current View (CSV)",
+            data=csv,
+            file_name=f"aadhaar_data_{display_location.replace(' ', '_')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    with col_export2:
+        # Export insights as text
+        insights = analytics.generate_insights(metric_df, display_location)
+        insights_text = f"Insights for {display_location}\n\n"
+        for i, insight in enumerate(insights, 1):
+            insights_text += f"{i}. {insight['title']}\n   {insight['message']}\n\n"
+        
+        st.download_button(
+            label="Download Insights (TXT)",
+            data=insights_text,
+            file_name=f"insights_{display_location.replace(' ', '_')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    
+    with col_export3:
+        # Export summary stats
+        summary_stats = f"""Aadhaar Dashboard Summary
+Location: {display_location}
+Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
+
+Key Metrics:
+- Total Enrolment: {total_enrol:,.0f}
+- Total Updates: {total_updates:,.0f}
+- Update Rate: {update_rate:.1f}%
+- Biometric Rate: {bio_rate:.1f}%
+
+Age Distribution:
+- 0-5 years: {age_0_5:,.0f}
+- 5-17 years: {age_5_17:,.0f}
+- 18+ years: {age_18_plus:,.0f}
+"""
+        st.download_button(
+            label="Download Summary (TXT)",
+            data=summary_stats,
+            file_name=f"summary_{display_location.replace(' ', '_')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
+    st.markdown("---")
+
+    # Row 2: Table
+    with st.expander("Detailed Regional Breakdown", expanded=True):
+        st.dataframe(
+            rank_df, # Showing top ranked initially
+            use_container_width=True,
+            hide_index=True,
+            height=250,
+            column_config={
+                "Enrolment": st.column_config.ProgressColumn("Enrolment", format="%d", min_value=0, max_value=int(rank_df['Enrolment'].max())),
+                "Updates": st.column_config.NumberColumn("Overall Updates", format="%d"),
+            }
+        )
+
+    # Row 3: Quarterly Trends (Left) & Comparison (Right)
+    c_trend, c_comp = st.columns(2)
+    
+    with c_trend:
+        # --- QUARTERLY ANALYSIS ---
+        if 'Quarter' in metric_df.columns:
+            st.subheader("Quarterly Trends (2025)")
+            
+            # Prepare Data
+            if 'datestamp' in metric_df.columns:
+                trend_df = metric_df.groupby('datestamp')[['Enrolment', 'Updates']].sum().reset_index()
+                trend_df = trend_df.sort_values('datestamp')
+                x_axis_col = 'datestamp'
+            else:
+                trend_df = metric_df.groupby(['Month', 'MonthOrder'])[['Enrolment', 'Updates']].sum().reset_index()
+                trend_df = trend_df.sort_values('MonthOrder')
+                x_axis_col = 'Month'
+            
+            if not trend_df.empty:
+                # Re-use helper logic inline or cleaned up
+                def create_mini_area(data, x_col, y_col, title, color_hex, fill_rgba):
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=data[x_col], y=data[y_col], mode='lines', fill='tozeroy',
+                        line=dict(color=color_hex, width=2), fillcolor=fill_rgba
+                    ))
+                    fig.update_layout(
+                        title=dict(text=title, font=dict(size=12)), # Removing explicit color to inherit theme
+                        margin=dict(t=30, l=10, r=10, b=20),
+                        height=150,
+                        xaxis=dict(showgrid=False, showticklabels=False),
+                        yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.2)'), # Removing explicit tickfont black color
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)'
+                    )
+                    return fig
+
+                st.plotly_chart(create_mini_area(trend_df, x_axis_col, 'Enrolment', "Enrolment", "#00A389", "rgba(0, 163, 137, 0.1)"), use_container_width=True)
+                st.plotly_chart(create_mini_area(trend_df, x_axis_col, 'Updates', "Updates", "#3B82F6", "rgba(59, 130, 246, 0.1)"), use_container_width=True)
+
+    with c_comp:
+        # --- COMPARISON CHART ---
+        st.subheader("Regional Comparison")
+        if st.session_state['view_mode'] == 'India':
+            comp_group = 'State'
+        else:
+            comp_group = 'District'
+            
+        comp_df = metric_df.groupby(comp_group)[['Enrolment', 'Updates']].sum().reset_index()
+        comp_df = comp_df.sort_values('Enrolment', ascending=False).head(10)
+        comp_df_melt = comp_df.melt(id_vars=comp_group, value_vars=['Enrolment', 'Updates'], var_name='Metric', value_name='Count')
+        
+        fig_bar_group = px.bar(
+            comp_df_melt, 
+            x=comp_group, 
+            y='Count', 
+            color='Metric', 
+            barmode='group',
+            color_discrete_map={'Enrolment': '#19D3F3', 'Updates': '#FF6692'},
+            template="plotly_white"
+        )
+        fig_bar_group.update_layout(
+            legend_title=None, 
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=320,
+            margin=dict(t=20, l=0, r=0, b=0)
+        )
+        st.plotly_chart(fig_bar_group, use_container_width=True)
 
 # ================= TAB 2: RECOMMENDATIONS =================
 with tab2:
@@ -424,22 +775,24 @@ with tab2:
         st.success(f"✅ No critical service gaps detected in {display_location}. Metrics are within healthy ranges.")
     else:
         # Display Recommendations
+        # Display Recommendations
         for rec in recommendations:
             rec_data = rec.to_dict()
             
             # Severity Color
             border_color = "#FF4B4B" if rec_data['Severity'] == "High" else "#FFA500" if rec_data['Severity'] == "Medium" else "#00CC96"
             
-            with st.container():
-                st.markdown(f"""
-                <div style="border-left: 5px solid {border_color}; padding: 10px; background-color: #f9f9f9; border-radius: 5px; margin-bottom: 10px;">
-                    <h3 style="margin: 0; color: #333;">{rec_data['Title']}</h3>
-                    <p style="margin: 5px 0; font-size: 14px; color: #555;">📍 <strong>{rec_data['District']}</strong> | Pin: {rec_data['PinCode']}</p>
-                    <p style="margin: 5px 0;">{rec_data['Description']}</p>
-                    <hr style="margin: 5px 0; border-color: #ddd;">
-                    <p style="font-weight: bold; color: {border_color}; margin: 5px 0;">🚀 Recommended Action: {rec_data['Action By User']}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            with st.container(border=True):
+                # Title with colored border effect simulation
+                st.markdown(f"### {rec_data['Title']}")
+                st.caption(f"📍 **{rec_data['District']}** | Pin: {rec_data['PinCode']}")
+                st.markdown(rec_data['Description'])
+                st.markdown("---")
+                st.markdown(f"**🚀 Recommended Action:** {rec_data['Action By User']}")
+                
+                # Optional: Add a colored accent line if desired, or rely on the container border
+                # Using a small markdown strip to show severity color
+                st.markdown(f'<div style="height: 4px; width: 100%; background-color: {border_color}; border-radius: 2px;"></div>', unsafe_allow_html=True)
 
     # --- SUPPORTING DATA (EVIDENCE) ---
     st.markdown("### 🔍 Supporting Evidence")

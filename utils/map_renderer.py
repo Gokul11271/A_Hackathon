@@ -74,7 +74,7 @@ def render_india_map(df, geojson, district_geojson, selected_metric, selected_ye
             color_continuous_scale=color_scale,
             range_color=(0, state_df[selected_metric].max()), 
             mapbox_style=mapbox_style,
-            zoom=3.5,
+            zoom=4.0,
             center={"lat": 22.5937, "lon": 78.9629},
             opacity=0.7,
             labels={selected_metric: selected_metric},

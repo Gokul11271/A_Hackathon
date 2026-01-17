@@ -390,7 +390,8 @@ def load_geojson():
     Loads India States GeoJSON.
     Tries local asset first, then falls back to URL.
     """
-    local_path = "d:/AadharHackathon/AadharHackathon/assets/india_states.geojson"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_path = os.path.join(base_dir, "assets", "india_states.geojson")
     if os.path.exists(local_path):
         try:
             with open(local_path, 'r') as f:
@@ -413,7 +414,8 @@ def load_district_geojson():
     Loads India Districts GeoJSON.
     Tries local asset first, then falls back to URL.
     """
-    local_path = "d:/AadharHackathon/AadharHackathon/assets/india_district.geojson"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_path = os.path.join(base_dir, "assets", "india_district.geojson")
     if os.path.exists(local_path):
         try:
             with open(local_path, 'r', encoding='utf-8') as f:

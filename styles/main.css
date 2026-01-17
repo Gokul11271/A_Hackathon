@@ -1,101 +1,107 @@
 /* Import premium fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* Global Styles */
+/* Global Styles & Variables */
+:root {
+    --bg-color: #0e1117;
+    --card-bg: rgba(255, 255, 255, 0.05);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --accent-color: #ff4b4b;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
 .main {
-    background-color: #fcfcfc;
-    /* Very light subtle grey/white */
     font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
 }
 
 /* Sidebar Styling */
 [data-testid="stSidebar"] {
-    background-color: #ffffff;
-    border-right: 1px solid #f0f0f0;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.02);
+    background-color: var(--bg-color);
+    border-right: 1px solid var(--border-color);
 }
 
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
-    color: #333;
+    color: var(--text-primary);
 }
 
-/* Titles */
+/* Typography */
 h1,
 h2,
 h3,
 h4 {
     font-family: 'Inter', sans-serif;
-    color: #111;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    color: var(--text-primary) !important;
+    font-weight: 600;
+    letter-spacing: -0.5px;
 }
 
-/* Metrics Cards - Glassmorphic / Premium Cards */
+/* Metrics Cards - Glassmorphic */
 div[data-testid="metric-container"] {
-    background: #ffffff;
-    border: 1px solid #eaeaea;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
-    transition: all 0.3s ease;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s ease;
 }
 
 div[data-testid="metric-container"]:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-    border-color: #d0d0d0;
+    transform: translateY(-2px);
+    border-color: #444;
 }
 
-/* Value styling in metrics */
 div[data-testid="metric-container"] label {
     font-weight: 500;
-    color: #666;
-    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
 }
 
 div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
     font-weight: 700;
-    color: #000;
-    font-size: 1.8rem;
+    color: var(--text-primary);
+    font-size: 1.6rem;
 }
 
-/* Map Container */
+/* Standardize st.container (Card UI) */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: var(--shadow);
+}
+
+/* Plotly Charts Container */
 .stPlotlyChart {
-    background-color: #000000;
-    border-radius: 16px;
-    /* padding: 10px; */
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
-    border: 1px solid #f0f0f0;
+    background-color: transparent;
+    border-radius: 8px;
 }
 
 /* Buttons */
 .stButton>button {
-    background-color: #ffffff;
-    color: #333;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.4rem 1rem;
+    font-weight: 500;
     transition: all 0.2s;
 }
 
 .stButton>button:hover {
-    border-color: #333;
-    background-color: #f9f9f9;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.stButton>button:active {
-    background-color: #f0f0f0;
+    border-color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* DataFrame / Tables */
 div[data-testid="stDataFrame"] {
-    border-radius: 12px;
-    border: 1px solid #eee;
-    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
 }
 
 /* Hide Streamlit Chrome */
@@ -111,193 +117,31 @@ header {
     visibility: hidden;
 }
 
-/* --- MARQUEE SYSTEM (REBUILT) --- */
-.marquee-wrapper {
-    width: 100%;
-    background: #000;
-    border-top: 2px solid #ff4b4b;
-    border-bottom: 2px solid #ff4b4b;
-    margin-bottom: 15px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    position: relative;
-    z-index: 50;
-    /* Ensure it stays above other content */
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
 }
 
-.marquee-container {
-    width: 100%;
-    overflow: hidden;
-    white-space: nowrap;
-    height: 60px;
-    /* Fixed height match previous request */
-    display: flex;
-    align-items: center;
+::-webkit-scrollbar-track {
+    background: transparent;
 }
 
-.marquee-track {
-    display: inline-block;
-    padding-left: 100%;
-    animation: marquee-scroll 200s linear infinite;
+::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
 }
 
-.marquee-track:hover {
-    animation-play-state: paused;
+::-webkit-scrollbar-thumb:hover {
+    background: #666;
 }
 
-@keyframes marquee-scroll {
-    0% {
-        transform: translate(0, 0);
-    }
-
-    100% {
-        transform: translate(-100%, 0);
-    }
-}
-
-.marquee-item {
-    display: inline-block;
-    padding: 0 60px;
-    font-size: 18px;
-    /* High visibility */
-    font-family: 'Inter', sans-serif;
-    color: #fff;
-    position: relative;
-    cursor: pointer;
-}
-
-.marquee-item a {
-    text-decoration: none;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.marquee-item:hover a {
-    color: #ff9f43;
-    /* Hover highlight */
-}
-
-.item-text {
-    font-weight: 600;
-}
-
-.item-loc {
-    font-weight: 300;
-    font-size: 0.9em;
-    opacity: 0.8;
-}
-
-/* Badges */
-.new-badge-css {
-    background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 900;
-    padding: 4px 6px;
-    /* Starburst using clip-path */
-    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
-            50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-    width: 36px;
-    height: 36px;
-    line-height: 36px;
-    text-align: center;
-    animation: wiggle 2s infinite ease-in-out;
-    display: inline-block;
-}
-
-.simple-badge {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 12px;
-    text-transform: uppercase;
-    color: #000;
-    background: #eee;
-}
-
-.simple-badge.medium {
-    background-color: #ffcc00;
-}
-
-.simple-badge.low {
-    background-color: #00cc96;
-}
-
-@keyframes wiggle {
-
-    0%,
-    100% {
-        transform: rotate(0deg);
-    }
-
-    15% {
-        transform: rotate(-10deg);
-    }
-
-    30% {
-        transform: rotate(10deg);
-    }
-}
-
-/* Tooltip */
-.marquee-item .tooltip-content {
-    visibility: hidden;
-    opacity: 0;
-    position: absolute;
-    top: 50px;
-    /* Below item */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 300px;
+/* Tooltips */
+.tooltip-content {
     background: #222;
     border: 1px solid #444;
     color: #ddd;
-    padding: 0;
-    border-radius: 6px;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    transition: 0.2s ease-in-out;
-    text-align: left;
-    pointer-events: none;
-    /* Let clicks pass to link usually, but here tooltip is just visual */
-}
-
-.marquee-item:hover .tooltip-content {
-    visibility: visible;
-    opacity: 1;
-    top: 65px;
-    /* Slide down effect */
-}
-
-.tt-header {
-    background: #333;
-    padding: 8px 12px;
-    font-weight: 700;
-    color: #ff9f43;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    font-size: 15px;
-}
-
-.tt-body {
-    padding: 12px 14px;
-    font-size: 14px;
-    line-height: 1.4;
-    color: #ccc;
-}
-
-.tt-body strong {
-    color: #fff;
-}
-
-.tt-footer {
-    font-size: 11px;
-    text-align: right;
-    padding: 6px 10px;
-    color: #777;
-    background: #1a1a1a;
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
-    border-top: 1px solid #333;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 12px;
 }
