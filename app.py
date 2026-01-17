@@ -264,25 +264,22 @@ with tab1:
                     # tick_mode = 'array'
                 
                 fig.update_layout(
-                    title=dict(text=title, font=dict(color='black', size=14)),
+                    title=dict(text=title, font=dict(size=14)),
                     xaxis=dict(
                         showgrid=False, 
                         showticklabels=True, 
-                        tickfont=dict(color='black'),
                         title=None,
                         tickformat=tick_fmt
                     ),
                     yaxis=dict(
                         showgrid=True, 
                         gridcolor='rgba(128,128,128,0.2)', 
-                        tickfont=dict(color='black'),
                         title=None
                     ),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     margin=dict(t=40, l=10, r=10, b=40),
                     showlegend=False,
-                    template="plotly_white",
                     hovermode="x unified"
                 )
                 return fig
