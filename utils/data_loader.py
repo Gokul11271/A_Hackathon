@@ -12,10 +12,25 @@ def load_data(filepath):
     """
     # Check if we should load from segregated folder
     import os
-    segregated_dir = "d:/AadharHackathon/AadharHackathon/Final_Processed_DataSet"
+    # Use relative path for portability
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    segregated_dir = os.path.join(base_dir, "Final_Processed_DataSet")
     
     df_list = []
     
+    # Common Date Processing Function
+    def process_dates(temp_df):
+        if 'date' in temp_df.columns:
+            temp_df['datestamp'] = pd.to_datetime(temp_df['date'], errors='coerce')
+            # If Year is missing, extract from date
+            if 'Year' not in temp_df.columns:
+                temp_df['Year'] = temp_df['datestamp'].dt.year
+            
+            temp_df['Month'] = temp_df['datestamp'].dt.strftime('%b') # Jan, Feb
+            temp_df['MonthOrder'] = temp_df['datestamp'].dt.month
+            temp_df['Quarter'] = temp_df['datestamp'].dt.quarter
+        return temp_df
+
     if os.path.exists(segregated_dir) and os.path.isdir(segregated_dir):
         files = [f for f in os.listdir(segregated_dir) if f.endswith('.csv')]
         if files:
@@ -42,14 +57,6 @@ def load_data(filepath):
                     }
                     temp_df.rename(columns=rename_map, inplace=True)
                     
-                    # Process date columns if 'date' exists and 'Year' is not already present
-                    if 'date' in temp_df.columns and 'Year' not in temp_df.columns:
-                        temp_df['datestamp'] = pd.to_datetime(temp_df['date'])
-                        temp_df['Year'] = temp_df['datestamp'].dt.year
-                        temp_df['Month'] = temp_df['datestamp'].dt.strftime('%b') # Jan, Feb
-                        temp_df['MonthOrder'] = temp_df['datestamp'].dt.month
-                        temp_df['Quarter'] = temp_df['datestamp'].dt.quarter
-                    
                     df_list.append(temp_df)
                 except Exception as e:
                     st.error(f"Failed to load {f}: {e}")
@@ -59,8 +66,10 @@ def load_data(filepath):
     else:
         # Fallback to single file logic
         # Override filepath to the new source if the default is passed
-        if "aadhaar_data.csv" in filepath:
-             filepath = "combined_full_Q1_Jan_Apr.csv"
+        # Use relative path logic for fallback too
+        if "aadhaar_data.csv" in filepath or "d:/" in filepath:
+             # Try to find the large CSV in the root
+             filepath = os.path.join(base_dir, "combined_full_Q1_Jan_Apr.csv")
 
         try:
             df = pd.read_csv(filepath, low_memory=False)
@@ -68,6 +77,9 @@ def load_data(filepath):
         except FileNotFoundError:
             st.error(f"Data file not found at {filepath}. Please check file path.")
             return pd.DataFrame()
+
+    # Apply Date Processing (Unified)
+    df = process_dates(df)
 
     # 2. Cleaning
     # Remove rows where State is numeric (dirty data)
@@ -102,7 +114,11 @@ def load_data(filepath):
     df['Gender_Ratio_Female'] = 0.0
     
     # Ensure Year is int
-    df['Year'] = pd.to_numeric(df['Year'], errors='coerce').fillna(2025).astype(int)
+    # If Year was extracted by process_dates, it might be float, so convert safely
+    if 'Year' in df.columns:
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce').fillna(2025).astype(int)
+    else:
+        df['Year'] = 2025
     
     # Fix casing for consistency (PROPER CASE)
     df['State'] = df['State'].astype(str).str.title().str.strip()

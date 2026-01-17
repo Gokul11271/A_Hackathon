@@ -34,7 +34,10 @@ if 'selected_district' not in st.session_state:
     st.session_state['selected_district'] = 'All Districts'
 
 # --- DATA LOADING ---
-DATA_PATH = "d:/AadharHackathon/aadhaar_data.csv"
+import os
+# Use a relative path placeholder, load_data handles the fallback logic but likes a path argument.
+# We'll stick to a simple filename which load_data will treat as relative/fallback.
+DATA_PATH = "aadhaar_data.csv" 
 df = load_data(DATA_PATH)
 state_geojson = load_geojson()
 district_geojson = load_district_geojson()
@@ -196,8 +199,10 @@ with tab1:
         y=y_col,
         color=y_col,
         title=title_chart,
-        color_continuous_scale='Viridis'
+        color_continuous_scale='Viridis',
+        template="plotly_white"
     )
+    fig_rank.update_layout(plot_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_rank, use_container_width=True)
 
 
@@ -253,34 +258,31 @@ with tab1:
                 # Determine Tick Format based on granularity
                 if x_col == 'datestamp':
                     tick_fmt = "%d %b" # e.g. 01 Jan
-                    tick_mode = 'auto'
-                    tick_vals = None
+                    # tick_mode = 'auto' # let plotly handle it
                 else:
                     tick_fmt = None
-                    tick_mode = 'array'
-                    tick_vals = data[x_col]
-
+                    # tick_mode = 'array'
+                
                 fig.update_layout(
-                    title=dict(text=title, font=dict(color='white', size=14)),
+                    title=dict(text=title, font=dict(color='black', size=14)),
                     xaxis=dict(
                         showgrid=False, 
                         showticklabels=True, 
-                        tickfont=dict(color='white'),
+                        tickfont=dict(color='black'),
                         title=None,
-                        tickformat=tick_fmt,
-                        tickmode=tick_mode,
-                        tickvals=tick_vals
+                        tickformat=tick_fmt
                     ),
                     yaxis=dict(
                         showgrid=True, 
                         gridcolor='rgba(128,128,128,0.2)', 
-                        tickfont=dict(color='white'),
+                        tickfont=dict(color='black'),
                         title=None
                     ),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     margin=dict(t=40, l=10, r=10, b=40),
                     showlegend=False,
+                    template="plotly_white",
                     hovermode="x unified"
                 )
                 return fig
@@ -291,7 +293,7 @@ with tab1:
                     trend_df, x_axis_col, 'Enrolment', 
                     "Enrolment Trend (Daily)", 
                     "#00A389", # Strong Green
-                    "rgba(0, 163, 137, 0.2)" # Transparent Green fill
+                    "rgba(0, 163, 137, 0.1)" # Transparent Green fill
                 )
                 st.plotly_chart(fig_enrol, use_container_width=True)
                 
@@ -301,7 +303,7 @@ with tab1:
                     trend_df, x_axis_col, 'Updates', 
                     "Updates Trend (Daily)", 
                     "#3B82F6", # Bright Blue
-                    "rgba(59, 130, 246, 0.2)" # Transparent Blue fill
+                    "rgba(59, 130, 246, 0.1)" # Transparent Blue fill
                 )
                 st.plotly_chart(fig_update, use_container_width=True)
 
@@ -337,7 +339,8 @@ with tab1:
             values='Count', 
             color='Age Group',
             color_discrete_map={'0-5 Years':'#636EFA', '5-17 Years':'#EF553B', '18+ Years':'#00CC96'},
-            hole=0.4
+            hole=0.4,
+            template="plotly_white"
         )
         fig_pie.update_traces(textposition='inside', textinfo='percent+label')
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -357,7 +360,9 @@ with tab1:
                 xaxis_title="Date", 
                 yaxis_title="Updates Count",
                 hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                template="plotly_white",
+                plot_bgcolor="rgba(0,0,0,0)"
             )
             st.plotly_chart(fig_line, use_container_width=True)
         else:
@@ -388,9 +393,10 @@ with tab1:
         color='Metric', 
         barmode='group',
         color_discrete_map={'Enrolment': '#19D3F3', 'Updates': '#FF6692'},
-        text_auto='.2s'
+        text_auto='.2s',
+        template="plotly_white"
     )
-    fig_bar_group.update_layout(xaxis_title=None, legend_title=None)
+    fig_bar_group.update_layout(xaxis_title=None, legend_title=None, plot_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_bar_group, use_container_width=True)
 
 # ================= TAB 2: RECOMMENDATIONS =================
@@ -507,7 +513,8 @@ with tab4:
                 hover_name="District",
                 color_discrete_map={'Normal': '#aec7e8', 'Anomaly': '#d62728'},
                 title="District Clusters: Enrolment vs Updates",
-                size='Enrolment'
+                size='Enrolment',
+                template="plotly_white"
             )
             st.plotly_chart(fig_vol, use_container_width=True)
             
@@ -555,7 +562,8 @@ with tab4:
             x='District',
             y=['0-5 %', '5-17 %', '18+ %'],
             title="Age Composition: Anomalies vs Benchmark",
-            color_discrete_sequence=['#636EFA', '#EF553B', '#00CC96']
+            color_discrete_sequence=['#636EFA', '#EF553B', '#00CC96'],
+            template="plotly_white"
         )
         st.plotly_chart(fig_age, use_container_width=True)
         
@@ -589,7 +597,7 @@ with tab4:
 
 # ================= TAB 5: TEMPORAL ANALYSIS =================
 with tab5:
-    st.subheader("⏳ Temporal Pattern Analysis: Metro vs Non-Metro")
+    st.subheader(" Temporal Pattern Analysis: Metro vs Non-Metro")
     
     with st.expander("ℹ️  Included Metro Regions"):
         st.write(", ".join(sorted(TemporalEngine.METRO_DISTRICTS)))
@@ -612,7 +620,7 @@ with tab5:
             
         # 2. Peak Detection & Recommendations
         with col_rec:
-            st.markdown("#### 🚀 Peak Demand Alerts")
+            st.markdown("#### Peak Demand Alerts")
             peaks = te.detect_peak_periods(metro_trends)
             
             if peaks:

@@ -2,10 +2,5 @@ streamlit
 pandas
 numpy
 plotly
-requests
-matplotlib
-pgeocode
-beautifulsoup4
-tabulate
 scikit-learn
 scipy
